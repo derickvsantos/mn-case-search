@@ -12,6 +12,7 @@ from modules.recaptcha import bypass_captcha_2captcha
 import re
 import traceback
 from modules.MyLogger import logger
+from datetime import datetime
 
 ROOT_DIR = Path(__file__).parent.parent
 
@@ -19,7 +20,7 @@ def make_firefox_browser():
     gecko_path = os.path.join(ROOT_DIR, "geckodriver.exe")
     gecko_service = Service(gecko_path)
     options = Options()
-    # options.add_argument("--headless")
+    options.add_argument("--headless")
     options.set_preference("dom.webdriver.enabled", False)
     options.set_preference("useAutomationExtension", False)
     options.set_preference("general.useragent.override", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36")
@@ -149,40 +150,62 @@ def separate_name(full_name):
     return first_name, last_name, middle_initial
 
 def search_case(case_code, browser, index):
-    browser.get('https://publicaccess.courts.state.mn.us/CaseSearch')
-    # Wait for popup
-    wait_and_click(browser, (By.ID, "tcModalAcceptBtn"), timeout=5)
-    # Selecting case number search tab
-    wait_and_click(browser, (By.XPATH, "//*[text()='Case Number']"), timeout=10)
+    try:
+        browser.get('https://publicaccess.courts.state.mn.us/CaseSearch')
+        # Wait for popup
+        wait_and_click(browser, (By.ID, "tcModalAcceptBtn"), timeout=5)
+        # Selecting case number search tab
+        wait_and_click(browser, (By.XPATH, "//*[text()='Case Number']"), timeout=10)
 
-    # Solving Captcha
-    captcha_locator = (By.XPATH, ".//div[contains(@class, 'g-recaptcha')]")
-    google_key = WebDriverWait(browser, 15).until(EC.presence_of_element_located(captcha_locator)).get_attribute("data-sitekey")
-    url = browser.current_url
+        # Solving Captcha
+        captcha_locator = (By.XPATH, ".//div[contains(@class, 'g-recaptcha')]")
+        google_key = WebDriverWait(browser, 15).until(EC.presence_of_element_located(captcha_locator)).get_attribute("data-sitekey")
+        url = browser.current_url
 
-    # Typing Case Number
-    search_element = WebDriverWait(browser, 20).until(EC.presence_of_element_located((By.ID, "CaseSearchNumber")))
-    search_element.send_keys(case_code)
+        # Typing Case Number
+        search_element = WebDriverWait(browser, 20).until(EC.presence_of_element_located((By.ID, "CaseSearchNumber")))
+        search_element.send_keys(case_code)
 
-    # Sending Captcha
-    captcha_token = bypass_captcha_2captcha(google_key, url)
-    captcha_element = browser.find_element(By.ID, 'g-recaptcha-response-1')
-    browser.execute_script("arguments[0].style.display = 'block';", captcha_element)
-    browser.execute_script(f"arguments[0].value = '{captcha_token}';", captcha_element)
-    browser.execute_script("""
-        var element = arguments[0];
-        element.value = arguments[1];
-        element.dispatchEvent(new Event('change', { bubbles: true }));
-    """, captcha_element, captcha_token)
+        # Sending Captcha
+        captcha_token = bypass_captcha_2captcha(google_key, url)
+        captcha_element = browser.find_element(By.ID, 'g-recaptcha-response-1')
+        browser.execute_script("arguments[0].style.display = 'block';", captcha_element)
+        browser.execute_script(f"arguments[0].value = '{captcha_token}';", captcha_element)
+        browser.execute_script("""
+            var element = arguments[0];
+            element.value = arguments[1];
+            element.dispatchEvent(new Event('change', { bubbles: true }));
+        """, captcha_element, captcha_token)
 
-    if not wait_and_click(browser, (By.ID, "btnCaseSearch"), timeout=10):
-        search_element.send_keys(Keys.ENTER)
+        if not wait_and_click(browser, (By.ID, "btnCaseSearch"), timeout=10):
+            search_element.send_keys(Keys.ENTER)
+        
+        wait_for_overlay_to_disappear(browser)
+        button = WebDriverWait(browser, 20).until(
+            EC.presence_of_element_located((By.XPATH, "//a[@class='btn btn-lg btn-mpa-primary float-right mpa-case-search-results-btn']"))
+        )
+        browser.execute_script("arguments[0].scrollIntoView(true);", button)
+        if not wait_and_click(browser, (By.XPATH, "//a[@class='btn btn-lg btn-mpa-primary float-right mpa-case-search-results-btn']"), timeout=30):
+            raise Exception("Botão de detalhes não encontrado após a busca.")
+        return get_information(browser, case_code)
+    except Exception as error:
+        logger.log_and_save(f"Error searching case: {case_code}")
+        logger.log_and_save(f"Details: {error}")
+        logger.log_and_save(f"Traceback: {traceback.format_exc()}")
+        take_screenshoot(browser)
+        raise Exception(f"Error searching case: {case_code}")
+
+def take_screenshoot(browser):
+    screenshoot_dir = os.path.join(Path(__file__).parent.parent, "printscreen")
+    if not os.path.exists(screenshoot_dir):
+        os.makedirs(screenshoot_dir)
     
-    wait_for_overlay_to_disappear(browser)
-    button = WebDriverWait(browser, 20).until(
-        EC.presence_of_element_located((By.XPATH, "//a[@class='btn btn-lg btn-mpa-primary float-right mpa-case-search-results-btn']"))
-    )
-    browser.execute_script("arguments[0].scrollIntoView(true);", button)
-    if not wait_and_click(browser, (By.XPATH, "//a[@class='btn btn-lg btn-mpa-primary float-right mpa-case-search-results-btn']"), timeout=30):
-        raise Exception("Botão de detalhes não encontrado após a busca.")
-    return get_information(browser, case_code)
+    timestamp = datetime.now().strftime("%Y-%m-%d_%H-%M-%S_%f")[:-3]
+    screenpath = os.path.join(screenshoot_dir, f"print_{timestamp}.png")
+    try:
+        browser.save_screenshot(screenpath)
+        logger.log_and_save(f"Printscreen saved in: {screenpath}")
+    except Exception as error:
+        logger.log_and_save(f"Error to save printscreen: {error}")
+        logger.log_and_save(f"Traceback: {traceback.format_exc()}")
+    
