@@ -186,7 +186,7 @@ def search_case(case_code, browser, index):
         )
         browser.execute_script("arguments[0].scrollIntoView(true);", button)
         if not wait_and_click(browser, (By.XPATH, "//a[@class='btn btn-lg btn-mpa-primary float-right mpa-case-search-results-btn']"), timeout=30):
-            raise Exception("Botão de detalhes não encontrado após a busca.")
+            raise Exception("Button details not found")
         return get_information(browser, case_code)
     except Exception as error:
         logger.log_and_save(f"Error searching case: {case_code}")
