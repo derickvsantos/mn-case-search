@@ -29,8 +29,11 @@ if __name__ == "__main__":
             full_case_number = f"{case_prefix}{case_number}"
             logger.log_and_save(f"Searching infos for case: {full_case_number}")
             try:
-                case_info = search_case(full_case_number, browser, index)
-                list_cases.append(case_info)
+                status, case_info = search_case(full_case_number, browser, index)
+                if status:
+                    list_cases.append(case_info)
+                else:
+                    logger.log_and_save(f"Case without decedent, going to next")
             except Exception as error:
                 logger.log_and_save(f"Error retrieving information for case {full_case_number}: {error}")
                 logger.log_and_save(traceback.format_exc())

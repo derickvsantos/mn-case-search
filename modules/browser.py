@@ -67,9 +67,11 @@ def get_information(browser, case_code):
             dict_case[key] = wait_and_get_text(browser, locator)
 
         texts = browser.find_elements(By.XPATH, '//div[@class="col-12 col-md-6"]')
+        flag_decedent = False
         for record in texts:
             record = record.text
             if 'Decedent\n' in record:
+                flag_decedent = True
                 decedent = record.split('\n')
                 dict_case.update(process_decedent(decedent))
 
@@ -92,8 +94,10 @@ def get_information(browser, case_code):
             if "Petitioner\n" in record:
                 petitioner = record.split('\n')
                 dict_case.update(process_petitioner(petitioner))
-
-        return dict_case
+        if flag_decedent:
+            return True, dict_case
+        else:
+            return False, {}
     except Exception as error:
         logger.log_and_save(f"Error getting information for case: {case_code}")
         logger.log_and_save(f'Traceback: {traceback.format_exc()}')
@@ -187,7 +191,11 @@ def search_case(case_code, browser, index):
         browser.execute_script("arguments[0].scrollIntoView(true);", button)
         if not wait_and_click(browser, (By.XPATH, "//a[@class='btn btn-lg btn-mpa-primary float-right mpa-case-search-results-btn']"), timeout=30):
             raise Exception("Button details not found")
-        return get_information(browser, case_code)
+        status, dict_case = get_information(browser, case_code)
+        if status:
+            return True, dict_case
+        else:
+            return False, {}
     except Exception as error:
         logger.log_and_save(f"Error searching case: {case_code}")
         logger.log_and_save(f"Details: {error}")
