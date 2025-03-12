@@ -20,7 +20,7 @@ def make_firefox_browser():
     gecko_path = os.path.join(ROOT_DIR, "geckodriver.exe")
     gecko_service = Service(gecko_path)
     options = Options()
-    options.add_argument("--headless")
+    # options.add_argument("--headless")
     options.set_preference("dom.webdriver.enabled", False)
     options.set_preference("useAutomationExtension", False)
     options.set_preference("general.useragent.override", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36")
@@ -185,9 +185,19 @@ def search_case(case_code, browser, index):
             search_element.send_keys(Keys.ENTER)
         
         wait_for_overlay_to_disappear(browser)
-        button = WebDriverWait(browser, 20).until(
-            EC.presence_of_element_located((By.XPATH, "//a[@class='btn btn-lg btn-mpa-primary float-right mpa-case-search-results-btn']"))
-        )
+        try:
+            button = WebDriverWait(browser, 5).until(
+                EC.presence_of_element_located((By.XPATH, "//a[@class='btn btn-lg btn-mpa-primary float-right mpa-case-search-results-btn']"))
+            )
+        except:
+            alert = WebDriverWait(browser, 20).until(
+                EC.presence_of_element_located((By.XPATH, "//div[@class='alert alert-info']"))
+            )
+            if alert:
+                logger.log_and_save(f"Case not found: {case_code}")
+                return False, {}
+            else:
+                raise Exception("Fail to search for case info")
         browser.execute_script("arguments[0].scrollIntoView(true);", button)
         if not wait_and_click(browser, (By.XPATH, "//a[@class='btn btn-lg btn-mpa-primary float-right mpa-case-search-results-btn']"), timeout=30):
             raise Exception("Button details not found")
